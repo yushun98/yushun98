@@ -1,3 +1,15 @@
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+
+data=pd.read_csv("/Users/ys/Desktop/dataset/data_25th.csv",index_col=1)
+data=data.drop(["Unnamed: 0"],axis=1)
+
+miu=data.iloc[:,[0,15,25,36,47,88]]
+
+for i in range(6):
+    miu=miu.loc[miu.iloc[:,i] >10,:]
+
 def update(beta):
     W_data=np.dot(np.dot(sigma,np.diag(beta)),beta)
     W_adverse=np.diag(1/W_data)
@@ -19,3 +31,5 @@ def beta_estimate(n,n_beta):
 
         beta=beta/sum(beta)  
     return beta 
+
+cishu = 500 ; n_genetypes = len(miu.iloc[:,0]) ; n_celltypes =4 ; n_samples = 1 ; n_beta = n_celltypes
