@@ -1,0 +1,163 @@
+###############################################################################################
+# kernel smoothing, with bandwidth determined by cross-validation.
+###############################################################################################
+##kernel function
+K<-function(u,kernel="gaussian"){
+  if(kernel=="gaussian") res<-dnorm(u)
+  if(kernel=="uniform") res<-dunif(u, -1,1)
+  if(kernel=="epanechikov"){ lu<-length(u); res<-numeric(lu)
+    for(i in 1:lu){
+      if(abs(u[i])<1) res[i]<-3*(1-u[i]^2)/4 else res[i]<-0  
+    }
+  }
+  if(kernel=="cosinus"){
+    lu<-length(u); res<-numeric(lu)
+    for(i in 1:lu){
+      if(abs(u[i])<1) res[i]<-pi*cos(pi*u[i]/2)/4 else res[i]<-0
+    }
+  }  
+  res
+}
+####
+# weighting function
+l<-function(x,xi,x.s,bw,kernel="gaussian"){
+    K.sum<-sum(K((x-x.s)/bw))
+    res<-K((x-xi)/bw)/K.sum 
+  res
+}
+###
+# My kernel smoother
+myksmooth<-function(x,x.s,y.s,bw,kernel="gaussian"){
+  n<-length(x.s)
+  m<-length(x)
+  res<-numeric(m)
+  for(j in 1:m){
+    w.s<-numeric(n)
+    for(i in 1:n){
+      w.s[i]<-l(x[j],x.s[i],x.s,bw,kernel)
+    }
+    res[j]<-drop(crossprod(y.s,w.s)) 
+  }
+  res
+}
+###
+# defining the score function to determine the bandwidth.
+hatR<-function(bw,x.s,y.s,kernel="gaussian"){
+  n<-length(x.s)
+  m<-length(bw)
+  res<-numeric(m)
+  for(j in 1:m){
+    w.s<-numeric(n)
+    for(i in 1:n){
+      w.s[i]<-l(x.s[i],x.s[i],x.s,bw[j],kernel)
+    }
+    hatm.s<-numeric(n)
+    for(i in 1:n){
+      hatm.s[i]<-myksmooth(x.s[i],x.s,y.s,bw[j],kernel)
+    }
+    res[j]<-mean(((y.s-hatm.s)/(1-w.s))^2) 
+  }
+  res
+}
+###
+# determining the bandwidth by cross-validation
+bw.cv<-function(x.s,y.s,kernel="gaussian"){
+  f<-function(bw) hatR(bw,x.s,y.s,kernel)
+  hstar<-optimize(f, c(0.001,5))$minimum
+  hstar
+}
+# 摩托车碰撞试验的例子
+###############################################################################################
+library("MASS")
+times<-mcycle$times
+accel<-mcycle$accel
+par(mfrow = c(1, 1), pty = "m",mai=c(0.8,0.8,0.2,0.2)) 
+plot(times, accel, pch=1, xlab="t", ylab="", main="", xlim=c(2,60))
+###
+h.cv<-bw.cv(times, accel,kernel="gaussian")
+tt<-seq(2, 60, length=500)
+yy<-myksmooth(tt,times,accel,h.cv,kernel="gaussian")
+lines(tt, yy, col=4,lwd=2)
+###############################################################################################
+# local linear regression by determining bandwidth by cross-validation.
+###############################################################################################
+##kernel function
+K<-function(u,kernel="gaussian"){
+  if(kernel=="gaussian") res<-dnorm(u)
+  if(kernel=="uniform") res<-dunif(u, -1,1)
+  if(kernel=="epanechikov"){ lu<-length(u); res<-numeric(lu)
+  for(i in 1:lu){
+    if(abs(u[i])<1) res[i]<-3*(1-u[i]^2)/4 else res[i]<-0  
+  }
+  }
+  if(kernel=="cosinus"){
+    lu<-length(u); res<-numeric(lu)
+    for(i in 1:lu){
+      if(abs(u[i])<1) res[i]<-pi*cos(pi*u[i]/2)/4 else res[i]<-0
+    }
+  }  
+  res
+}
+####
+# weighting function
+Xx<-function(x,x.s){
+  n<-length(x.s)
+  cbind(rep(1,times=n),x.s-x)
+}
+l<-function(x,xi,x.s,bw,kernel="gaussian"){
+n<-length(x.s)
+  e1<-c(1,0)
+  i<-1; while(xi!=x.s[i]) {i<-i+1}
+    Wx<-diag(K((x-x.s)/bw),nr=n)
+    lv<-drop(e1%*%solve(t(Xx(x,x.s))%*%Wx%*%Xx(x,x.s))%*%t(Xx(x,x.s))%*%Wx)
+  res<-lv[i]
+  res
+}
+###
+# My local linear smoother
+myllreg<-function(x,x.s,y.s,bw,kernel="gaussian"){
+  n<-length(x.s)
+  m<-length(x)
+  res<-numeric(m)
+  for(j in 1:m){
+    w.s<-numeric(n)
+    for(i in 1:n){
+      w.s[i]<-l(x[j],x.s[i],x.s,bw,kernel)
+    }
+    res[j]<-drop(crossprod(y.s,w.s)) 
+  }
+  res
+}
+###
+# defining the score function to determine the bandwidth.
+hatR<-function(bw,x.s,y.s,kernel="gaussian"){
+  n<-length(x.s)
+  m<-length(bw)
+  res<-numeric(m)
+  for(j in 1:m){
+    w.s<-numeric(n)
+    for(i in 1:n){
+      w.s[i]<-l(x.s[i],x.s[i],x.s,bw[j],kernel)
+    }
+    hatm.s<-numeric(n)
+    for(i in 1:n){
+      hatm.s[i]<-myllreg(x.s[i],x.s,y.s,bw[j],kernel)
+    }
+    res[j]<-mean(((y.s-hatm.s)/(1-w.s))^2) 
+  }
+  res
+}
+###
+# determining the bandwidth by cross-validation
+bw.cv<-function(x.s,y.s,kernel="gaussian"){
+  f<-function(bw) hatR(bw,x.s,y.s,kernel)
+  hstar<-optimize(f, c(0.001,5))$minimum
+  hstar
+}
+###
+h.cv<-bw.cv(times, accel,kernel="gaussian")
+tt<-seq(2, 60, length=500)
+yy<-myllreg(tt,times,accel,h.cv,kernel="gaussian")
+par(mfrow = c(1, 1), pty = "m",mai=c(0.8,0.8,0.2,0.2)) 
+plot(times, accel, pch=1, xlab="t", ylab="", main="", xlim=c(2,60))
+lines(tt, yy, col=4,lwd=2)
